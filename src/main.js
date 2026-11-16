@@ -4,7 +4,7 @@
 //   electron . --login-only  -> just the Unity sign-in window (used by `uad login`);
 //                               exits 0 on success, 1 if the window is closed.
 
-const { app, BrowserWindow, ipcMain, dialog, shell, session } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, session, nativeTheme, Notification } = require('electron');
 const path = require('path');
 const store = require('./core/store');
 const { AssetStoreClient, AuthError, getLocalStatus, ORIGIN, LOGIN_URL, USER_AGENT } = require('./core/api');
@@ -107,15 +107,66 @@ async function logout() {
 const active = new Map(); // id -> AbortController
 let running = 0;
 const waiting = [];
+let batch = { done: 0, failed: 0, names: [] }; // for the "finished" notification
 
-function acquire() {
-    const limit = Math.max(1, store.loadConfig().concurrency || 2);
-    if (running < limit) { running++; return Promise.resolve(); }
-    return new Promise((r) => waiting.push(r));
+/** Start queued downloads while there is room (also called when concurrency changes). */
+function pump() {
+    const limit = store.loadConfig().concurrency;
+    while (waiting.length && running < limit) {
+        running++;
+        waiting.shift()();
+    }
+}
+function acquire(signal) {
+    return new Promise((resolve, reject) => {
+        const go = () => { signal.removeEventListener('abort', onAbort); resolve(); };
+        const onAbort = () => {
+            const i = waiting.indexOf(go);
+            if (i >= 0) {
+                waiting.splice(i, 1);
+                reject(Object.assign(new Error('Cancelled'), { name: 'AbortError' }));
+            }
+        };
+        signal.addEventListener('abort', onAbort, { once: true });
+        waiting.push(go);
+        pump();
+    });
 }
 function release() {
-    const next = waiting.shift();
-    if (next) next(); else running--;
+    running--;
+    pump();
+}
+
+// Keep shown notifications referenced: if the JS object is garbage-collected,
+// macOS may drop the notification and its click handler.
+const liveNotifications = new Set();
+
+function notify(title, body) {
+    if (!Notification.isSupported()) return false;
+    const n = new Notification({ title, body, silent: false });
+    liveNotifications.add(n);
+    const forget = () => liveNotifications.delete(n);
+    n.on('click', () => { forget(); if (mainWindow) { mainWindow.show(); mainWindow.focus(); } });
+    n.on('close', forget);
+    n.on('failed', (_e, err) => { forget(); console.error('[notify] failed:', err); });
+    setTimeout(forget, 5 * 60 * 1000);
+    n.show();
+    return true;
+}
+
+function batchFinished() {
+    const { done, failed, names } = batch;
+    batch = { done: 0, failed: 0, names: [] };
+    if (!store.loadConfig().notify || done + failed === 0) return;
+    const title = failed ? `Downloads finished – ${failed} failed` : 'Downloads finished';
+    const body = done === 1 && !failed ? names[0] : `${done} downloaded${failed ? `, ${failed} failed` : ''}`;
+    notify(title, body);
+    // Extra nudge on macOS when the app is in the background.
+    if (process.platform === 'darwin' && app.dock && !(mainWindow && mainWindow.isFocused())) app.dock.bounce('informational');
+}
+
+function applyTheme(theme) {
+    nativeTheme.themeSource = ['light', 'dark'].includes(theme) ? theme : 'system';
 }
 
 async function startDownload(asset) {
@@ -125,12 +176,15 @@ async function startDownload(asset) {
     const send = (ch, payload) => mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents.send(ch, payload);
     send('download:progress', { id: asset.id, state: 'queued' });
     try {
-        await acquire();
+        await acquire(ac.signal);
         try {
             if (ac.signal.aborted) throw Object.assign(new Error('Cancelled'), { name: 'AbortError' });
-            const dir = store.loadConfig().downloadDir;
+            const cfg = store.loadConfig();
+            const dir = cfg.downloadDir;
             const result = await client.download(asset, {
                 dir, signal: ac.signal,
+                subfolder: cfg.layout === 'publisher' ? (asset.publisher || 'Unknown publisher') : undefined,
+                keepOld: cfg.keepOldVersions,
                 // "Update": replace the outdated copy the renderer told us about.
                 // Only ever delete files inside the download folder.
                 replaceFile: asset.replaceFile &&
@@ -139,6 +193,8 @@ async function startDownload(asset) {
                 onProgress: (p) => send('download:progress', { id: asset.id, state: 'downloading', ...p }),
             });
             send('download:progress', { id: asset.id, state: 'done', ...result });
+            batch.done++;
+            batch.names.push(asset.name);
             return result;
         } finally {
             release();
@@ -146,10 +202,12 @@ async function startDownload(asset) {
     } catch (e) {
         const cancelled = e.name === 'AbortError' || ac.signal.aborted;
         const payload = { id: asset.id, state: cancelled ? 'cancelled' : 'error', error: e.message, auth: e instanceof AuthError };
+        if (!cancelled) batch.failed++;
         send('download:progress', payload);
         return payload;
     } finally {
         active.delete(asset.id);
+        if (active.size === 0) batchFinished();
     }
 }
 
@@ -178,7 +236,28 @@ function registerIpc() {
     ipcMain.handle('download:cancel', (_e, id) => { active.get(id)?.abort(); return true; });
 
     ipcMain.handle('config:get', () => store.loadConfig());
-    ipcMain.handle('config:set', (_e, patch) => store.saveConfig(patch));
+    ipcMain.handle('config:set', (_e, patch) => {
+        const cfg = store.saveConfig(patch);
+        applyTheme(cfg.theme);
+        pump(); // concurrency may have gone up
+        return cfg;
+    });
+    ipcMain.handle('config:defaults', () => store.DEFAULT_CONFIG);
+    ipcMain.handle('app:info', () => ({
+        version: app.getVersion(), configDir: store.CONFIG_DIR,
+        notificationsSupported: Notification.isSupported(),
+    }));
+    ipcMain.handle('shell:openConfigDir', () => shell.openPath(store.CONFIG_DIR));
+    ipcMain.handle('notify:test', () => ({
+        shown: notify('Unity Asset Downloader', 'Notifications are working.'),
+        // Under `npm start` macOS sees the generic Electron binary, not this app.
+        appName: process.platform === 'darwin' && !app.isPackaged ? 'Electron' : app.getName(),
+        platform: process.platform,
+    }));
+    ipcMain.handle('notify:openSystemSettings', () => {
+        if (process.platform === 'darwin') shell.openExternal('x-apple.systempreferences:com.apple.Notifications-Settings.extension');
+        else if (process.platform === 'win32') shell.openExternal('ms-settings:notifications');
+    });
     ipcMain.handle('config:chooseDir', async () => {
         const r = await dialog.showOpenDialog(mainWindow, {
             properties: ['openDirectory', 'createDirectory'],
@@ -224,6 +303,7 @@ app.whenReady().then(async () => {
         app.exit(ok ? 0 : 1);
         return;
     }
+    applyTheme(store.loadConfig().theme);
     registerIpc();
     createMainWindow();
 });

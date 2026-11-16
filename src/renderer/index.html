@@ -43,6 +43,7 @@
       <button id="btn-update-all" class="primary hidden" title="Download the newest version of every outdated package">Update all</button>
       <button id="btn-dl-visible" title="Download every asset in the current view that isn't downloaded or is outdated">Download shown</button>
       <button id="btn-refresh" title="Reload list">↻</button>
+      <button id="btn-settings" title="Settings">⚙︎</button>
       <button id="btn-logout" title="Sign out">Sign out</button>
     </header>
 
@@ -66,6 +67,75 @@
       <ul id="list"></ul>
     </main>
   </section>
+
+  <dialog id="settings">
+    <form method="dialog" id="settings-form">
+      <h2>Settings</h2>
+
+      <fieldset>
+        <legend>Downloads</legend>
+        <div class="field">
+          <label>Download folder</label>
+          <div class="dirpick">
+            <span id="set-dir" class="path"></span>
+            <button type="button" id="set-dir-change">Change…</button>
+            <button type="button" id="set-dir-open" class="link">Open</button>
+          </div>
+          <p class="help">Packages already in this folder (and its subfolders) are detected and checked for updates.</p>
+        </div>
+
+        <div class="field">
+          <label for="set-concurrency">Concurrent downloads</label>
+          <div class="range">
+            <input id="set-concurrency" type="range" min="1" max="8" step="1">
+            <output id="set-concurrency-val"></output>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="set-layout">Organize downloads</label>
+          <select id="set-layout">
+            <option value="flat">All in one folder</option>
+            <option value="publisher">Subfolder per publisher</option>
+          </select>
+          <p class="help">Only affects new downloads. Existing files stay where they are.</p>
+        </div>
+
+        <div class="field">
+          <label>When updating a package</label>
+          <label class="radio"><input type="radio" name="keepOld" value="false"> Replace the old version</label>
+          <label class="radio"><input type="radio" name="keepOld" value="true"> Keep the old version (renamed “Name (v1.2)”)</label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>App</legend>
+        <div class="field">
+          <div class="notify-row">
+            <label class="check"><input id="set-notify" type="checkbox"> Notify me when downloads finish</label>
+            <button type="button" id="set-notify-test" class="link">Send test</button>
+          </div>
+          <p class="help hidden" id="set-notify-help"></p>
+        </div>
+        <div class="field">
+          <label for="set-theme">Theme</label>
+          <select id="set-theme">
+            <option value="system">System</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </div>
+      </fieldset>
+
+      <div class="dialog-foot">
+        <button type="button" id="set-reset" class="link muted">Reset to defaults</button>
+        <button type="button" id="set-configdir" class="link muted" title="Session and settings files">Settings folder</button>
+        <span class="spacer"></span>
+        <span id="set-version" class="muted"></span>
+        <button value="close" class="primary">Done</button>
+      </div>
+    </form>
+  </dialog>
 
   <script src="renderer.js"></script>
 </body>

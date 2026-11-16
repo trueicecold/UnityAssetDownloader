@@ -354,9 +354,10 @@ $('#btn-logout').onclick = async () => {
 };
 $('#btn-refresh').onclick = loadAssets;
 $('#btn-folder').onclick = async () => {
+    const prevDir = state.config && state.config.downloadDir;
     await uad.chooseDir();
     await refreshFolder();
-    loadAssets(); // downloaded/outdated badges depend on folder
+    if (state.config.downloadDir !== prevDir) loadAssets(); // badges depend on folder
 };
 $('#btn-open-folder').onclick = () => uad.openDir();
 $('#select-all').onchange = () => {
@@ -385,6 +386,87 @@ let searchTimer;
 $('#search').oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(render, 120); };
 $('#filter').onchange = render;
 $('#sort').onchange = render;
+
+// ───────── settings dialog ─────────
+
+function fillSettings(cfg) {
+    $('#set-dir').textContent = cfg.downloadDir;
+    $('#set-dir').title = cfg.downloadDir;
+    $('#set-concurrency').value = cfg.concurrency;
+    $('#set-concurrency-val').textContent = cfg.concurrency;
+    $('#set-layout').value = cfg.layout;
+    document.querySelectorAll('input[name=keepOld]').forEach((r) => { r.checked = r.value === String(cfg.keepOldVersions); });
+    $('#set-notify').checked = cfg.notify;
+    $('#set-theme').value = cfg.theme;
+}
+
+async function saveSetting(patch) {
+    const prevDir = state.config && state.config.downloadDir;
+    state.config = await uad.setConfig(patch);
+    fillSettings(state.config);
+    await refreshFolder();
+    if (state.config.downloadDir !== prevDir && state.assets.length) loadAssets(); // badges depend on folder
+}
+
+async function openSettings() {
+    fillSettings(await uad.getConfig());
+    const info = await uad.appInfo();
+    $('#set-version').textContent = `v${info.version}`;
+    $('#set-notify').disabled = !info.notificationsSupported;
+    $('#settings').showModal();
+}
+
+$('#btn-settings').onclick = openSettings;
+$('#set-dir-change').onclick = async () => {
+    const prevDir = state.config && state.config.downloadDir;
+    state.config = await uad.chooseDir();
+    fillSettings(state.config);
+    await refreshFolder();
+    if (state.config.downloadDir !== prevDir && state.assets.length) loadAssets();
+};
+$('#set-dir-open').onclick = () => uad.openDir();
+$('#set-concurrency').oninput = () => { $('#set-concurrency-val').textContent = $('#set-concurrency').value; };
+$('#set-concurrency').onchange = () => saveSetting({ concurrency: Number($('#set-concurrency').value) });
+$('#set-layout').onchange = () => saveSetting({ layout: $('#set-layout').value });
+document.querySelectorAll('input[name=keepOld]').forEach((r) => { r.onchange = () => saveSetting({ keepOldVersions: r.value === 'true' }); });
+$('#set-notify').onchange = () => saveSetting({ notify: $('#set-notify').checked });
+$('#set-theme').onchange = () => saveSetting({ theme: $('#set-theme').value });
+$('#set-configdir').onclick = () => uad.openConfigDir();
+$('#set-notify-test').onclick = async () => {
+    const r = await uad.testNotification();
+    const help = $('#set-notify-help');
+    help.replaceChildren();
+    if (!r.shown) {
+        help.textContent = 'Notifications are not supported on this system.';
+    } else {
+        const where = r.platform === 'darwin' ? 'System Settings → Notifications'
+            : r.platform === 'win32' ? 'Settings → System → Notifications' : 'your notification settings';
+        help.append(`Sent. Didn't see it? Allow notifications for “${r.appName}” in ${where}, and check that Focus / Do Not Disturb is off. `);
+        if (r.platform === 'darwin' || r.platform === 'win32') {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'link';
+            b.textContent = 'Open notification settings';
+            b.onclick = () => uad.openNotificationSettings();
+            help.append(b);
+        }
+    }
+    help.classList.remove('hidden');
+};
+$('#set-reset').onclick = async () => {
+    if (!confirm('Reset all settings (including the download folder) to defaults?')) return;
+    const d = await uad.getDefaults();
+    await saveSetting(d);
+};
+// Click on the backdrop closes the dialog.
+$('#settings').addEventListener('click', (e) => { if (e.target === $('#settings')) $('#settings').close(); });
+// Cmd/Ctrl + , opens settings.
+document.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === ',' && !$('#app').classList.contains('hidden')) {
+        e.preventDefault();
+        openSettings();
+    }
+});
 
 (async function init() {
     await refreshFolder();

@@ -121,3 +121,42 @@ input[type=checkbox] { width: 16px; height: 16px; margin: 0; padding: 0; accent-
 .selectbar button.primary { padding: 4px 10px; }
 .row.selected { background: color-mix(in srgb, var(--accent) 10%, var(--row)); }
 .row.selected:hover { background: color-mix(in srgb, var(--accent) 16%, var(--row)); }
+
+/* ───────── settings dialog ───────── */
+dialog {
+  width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 48px);
+  padding: 0; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--panel); color: var(--text);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .45);
+}
+dialog::backdrop { background: rgba(0, 0, 0, .45); }
+dialog[open] { display: flex; flex-direction: column; overflow: hidden; }
+dialog form { padding: 18px 20px 14px; overflow-y: auto; min-height: 0; }
+dialog h2 { margin: 0 0 12px; font-size: 16px; }
+fieldset { border: none; margin: 0 0 8px; padding: 0; }
+legend {
+  font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--muted); padding: 0; margin-bottom: 6px;
+}
+.field { padding: 10px 0; border-top: 1px solid var(--border); }
+.field > label:first-child:not(.check):not(.radio) { display: block; font-weight: 600; margin-bottom: 6px; }
+.field select { min-width: 220px; }
+.help { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+.dirpick { display: flex; align-items: center; gap: 8px; }
+.dirpick .path {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px;
+}
+.range { display: flex; align-items: center; gap: 12px; }
+.range input { flex: 1; accent-color: var(--accent); }
+.range output { min-width: 2ch; font-weight: 600; text-align: right; }
+label.radio, label.check { display: flex; align-items: center; gap: 8px; padding: 3px 0; cursor: pointer; }
+input[type=radio] { margin: 0; accent-color: var(--accent); }
+.dialog-foot {
+  display: flex; align-items: center; gap: 10px;
+  border-top: 1px solid var(--border); margin-top: 6px; padding-top: 12px; font-size: 12px;
+}
+
+.notify-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.help .link { padding: 0; font-size: 12px; }

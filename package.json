@@ -1,21 +1,74 @@
 {
   "name": "unity-asset-downloader",
+  "productName": "Unity Asset Downloader",
   "version": "1.0.0",
   "description": "Desktop app + CLI to list your Unity Asset Store assets and download their .unitypackage files",
+  "author": "trueicecold",
   "main": "src/main.js",
   "bin": {
     "uad": "src/cli.js"
   },
   "scripts": {
     "start": "electron .",
-    "cli": "node src/cli.js"
+    "cli": "node src/cli.js",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist": "electron-builder --mac --win"
   },
   "engines": {
     "node": ">=20"
   },
   "license": "MIT",
-  "devDependencies": {},
-  "dependencies": {
-    "electron": "^33.2.1"
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.trueicecold.unity-asset-downloader",
+    "productName": "Unity Asset Downloader",
+    "afterPack": "build/after-pack.js",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "bin",
+        "to": "bin"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "identity": null,
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["arm64", "x64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["arm64", "x64"]
+        }
+      ]
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }

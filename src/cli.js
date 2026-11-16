@@ -26,7 +26,13 @@ Commands
       --out <dir>            Destination (default: config downloadDir)
       -j, --jobs <n>         Parallel downloads (default: config concurrency)
       --force                Re-download even if the copy is already up to date
-  config [key] [value]       Show / set config (downloadDir, concurrency)
+  config [key] [value]       Show / set settings (shared with the app):
+                               downloadDir      folder path
+                               concurrency      1-8
+                               layout           flat | publisher
+                               keepOldVersions  true | false
+                               notify           true | false (app only)
+                               theme            system | light | dark (app only)
   gui                        Launch the desktop app
 
 Packages in the download folder are recognised by the Asset Store metadata
@@ -86,7 +92,12 @@ function parseCookieString(str) {
     return cookies;
 }
 
+// Inside a packaged build the CLI is run by the app's own executable in Node
+// mode (see bin/uad, bin/uad.cmd), so the GUI is just process.execPath.
+const PACKAGED = !!process.versions.electron && __dirname.includes('app.asar');
+
 function electronBinary() {
+    if (PACKAGED) return process.execPath;
     try {
         return require('electron'); // resolves to the binary path when required from Node
     } catch {
@@ -100,7 +111,8 @@ function runElectron(args) {
         // would make the Electron binary behave like plain Node.
         const env = { ...process.env };
         delete env.ELECTRON_RUN_AS_NODE;
-        const child = spawn(electronBinary(), [path.join(__dirname, '..'), ...args], { stdio: 'inherit', env });
+        const appArgs = PACKAGED ? args : [path.join(__dirname, '..'), ...args];
+        const child = spawn(electronBinary(), appArgs, { stdio: 'inherit', env });
         child.on('error', reject);
         child.on('exit', (code) => resolve(code ?? 1));
     });
@@ -245,6 +257,8 @@ async function cmdDownload(opts) {
             const l = local[a.id];
             const r = await c.download(a, {
                 dir, signal: ac.signal,
+                subfolder: cfg.layout === 'publisher' ? (a.publisher || 'Unknown publisher') : undefined,
+                keepOld: cfg.keepOldVersions,
                 replaceFile: l ? l.file : undefined, // update / re-download replaces the old copy
                 onProgress: (p) => { live.set(a.name, p); draw(); },
             });
@@ -273,11 +287,19 @@ async function cmdDownload(opts) {
 
 function cmdConfig(opts) {
     const [key, value] = opts._;
-    if (!key) { console.log(JSON.stringify(store.loadConfig(), null, 2)); return 0; }
-    if (value === undefined) { console.log(store.loadConfig()[key]); return 0; }
-    const v = key === 'concurrency' ? Number(value) : key === 'downloadDir' ? path.resolve(value) : value;
-    store.saveConfig({ [key]: v });
-    console.log(`${key} = ${v}`);
+    const cfg = store.loadConfig();
+    if (!key) { console.log(JSON.stringify(cfg, null, 2)); return 0; }
+    if (!(key in store.DEFAULT_CONFIG)) {
+        console.error(`Unknown setting "${key}". Known: ${Object.keys(store.DEFAULT_CONFIG).join(', ')}`);
+        return 1;
+    }
+    if (value === undefined) { console.log(cfg[key]); return 0; }
+    const next = store.saveConfig({ [key]: value });
+    if (String(next[key]) !== String(value) && key !== 'downloadDir') {
+        console.error(`"${value}" is not valid for ${key}; it is now ${next[key]}.`);
+        return 1;
+    }
+    console.log(`${key} = ${next[key]}`);
     return 0;
 }
 

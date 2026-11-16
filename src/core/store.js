@@ -13,8 +13,26 @@ const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 
 const DEFAULT_CONFIG = {
     downloadDir: path.join(os.homedir(), 'Downloads', 'UnityAssets'),
-    concurrency: 2,
+    concurrency: 2,          // parallel downloads (1-8)
+    layout: 'flat',          // 'flat' | 'publisher' (one subfolder per publisher)
+    keepOldVersions: false,  // on update: keep the previous file renamed "<name> (v1.2)"
+    notify: true,            // desktop notification when a batch of downloads finishes
+    theme: 'system',         // 'system' | 'light' | 'dark'
 };
+
+/** Coerce / clamp user-supplied settings; unknown keys are dropped. */
+function validateConfig(c) {
+    const out = { ...DEFAULT_CONFIG };
+    if (typeof c.downloadDir === 'string' && c.downloadDir.trim()) out.downloadDir = path.resolve(c.downloadDir.trim().replace(/^~(?=$|[\\/])/, os.homedir()));
+    const n = parseInt(c.concurrency, 10);
+    if (Number.isFinite(n)) out.concurrency = Math.min(8, Math.max(1, n));
+    if (['flat', 'publisher'].includes(c.layout)) out.layout = c.layout;
+    const bool = (v) => v === true || v === 'true' || v === '1' || v === 1;
+    if (c.keepOldVersions !== undefined) out.keepOldVersions = bool(c.keepOldVersions);
+    if (c.notify !== undefined) out.notify = bool(c.notify);
+    if (['system', 'light', 'dark'].includes(c.theme)) out.theme = c.theme;
+    return out;
+}
 
 function ensureDir() {
     fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
@@ -49,16 +67,16 @@ function clearSession() {
 }
 
 function loadConfig() {
-    return { ...DEFAULT_CONFIG, ...readJson(CONFIG_FILE, {}) };
+    return validateConfig(readJson(CONFIG_FILE, {}));
 }
 
 function saveConfig(patch) {
-    const next = { ...loadConfig(), ...patch };
+    const next = validateConfig({ ...loadConfig(), ...patch });
     writeJson(CONFIG_FILE, next, 0o644);
     return next;
 }
 
 module.exports = {
     CONFIG_DIR, SESSION_FILE, CONFIG_FILE,
-    loadCookies, saveCookies, clearSession, loadConfig, saveConfig,
+    DEFAULT_CONFIG, loadCookies, saveCookies, clearSession, loadConfig, saveConfig,
 };

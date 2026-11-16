@@ -261,11 +261,13 @@ class AssetStoreClient {
     /**
      * Download an owned asset's .unitypackage into `dir`.
      * Resumable (partial data kept in dir/.partial). With `replaceFile`
-     * (an outdated local copy) the old file is removed once the new one is in place.
+     * (an outdated local copy) the old file is removed once the new one is in
+     * place – or, with `keepOld`, renamed to "<name> (v<old version>)".
+     * `subfolder` (e.g. the publisher) is created under `dir`.
      *
      * @returns {Promise<{status:'downloaded', file:string, bytes:number, version?:string, warning?:string}>}
      */
-    async download(asset, { dir, replaceFile, signal, onProgress } = {}) {
+    async download(asset, { dir, subfolder, replaceFile, keepOld = false, signal, onProgress } = {}) {
         const id = typeof asset === 'object' ? asset.id : String(asset);
         const meta = typeof asset === 'object' ? asset : { id };
         fs.mkdirSync(dir, { recursive: true });
@@ -316,13 +318,27 @@ class AssetStoreClient {
             filename = `${base}.unitypackage`;
         }
         filename = sanitizeFilename(filename);
-        const finalPath = path.join(dir, filename);
-        fs.renameSync(partFile, finalPath); // overwrites a same-named older copy
+        const finalDir = subfolder ? path.join(dir, sanitizeFilename(subfolder)) : dir;
+        fs.mkdirSync(finalDir, { recursive: true });
+        const finalPath = path.join(finalDir, filename);
 
-        // An update may come with a different file name – drop the outdated copy.
-        if (replaceFile && path.resolve(replaceFile) !== path.resolve(finalPath)) {
-            try { fs.unlinkSync(replaceFile); } catch { /* already gone */ }
+        // Deal with the copy being replaced (update / re-download).
+        if (replaceFile && fs.existsSync(replaceFile)) {
+            const oldInfo = readPackageInfo(replaceFile);
+            const newInfo = readPackageInfo(partFile);
+            const differs = oldInfo && newInfo &&
+                (oldInfo.versionId !== newInfo.versionId || oldInfo.version !== newInfo.version);
+            if (keepOld && differs) {
+                const base = path.basename(replaceFile, path.extname(replaceFile))
+                    .replace(/ \(v[^)]*\)$/, ''); // don't stack "(v1) (v2)"
+                const kept = path.join(path.dirname(replaceFile),
+                    sanitizeFilename(`${base} (v${oldInfo.version || oldInfo.versionId || 'old'}).unitypackage`));
+                if (path.resolve(kept) !== path.resolve(replaceFile)) fs.renameSync(replaceFile, kept);
+            } else if (path.resolve(replaceFile) !== path.resolve(finalPath)) {
+                try { fs.unlinkSync(replaceFile); } catch { /* already gone */ }
+            }
         }
+        fs.renameSync(partFile, finalPath); // overwrites a same-named older copy
 
         // A .unitypackage is a gzipped tar with Asset Store metadata in its header.
         let warning;
@@ -338,7 +354,7 @@ class AssetStoreClient {
         const bytes = fs.statSync(finalPath).size;
         const version = (info && info.version) || meta.version || null;
         const versionId = (info && info.versionId) || meta.versionId || null;
-        index.set(id, { file: filename, version, versionId, name: meta.name || null, bytes, at: new Date().toISOString() });
+        index.set(id, { file: path.relative(dir, finalPath), version, versionId, name: meta.name || null, bytes, at: new Date().toISOString() });
         return { status: 'downloaded', file: finalPath, bytes, version, versionId, warning };
     }
 }
