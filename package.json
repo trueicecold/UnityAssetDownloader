@@ -1,0 +1,21 @@
+{
+  "name": "unity-asset-downloader",
+  "version": "1.0.0",
+  "description": "Desktop app + CLI to list your Unity Asset Store assets and download their .unitypackage files",
+  "main": "src/main.js",
+  "bin": {
+    "uad": "src/cli.js"
+  },
+  "scripts": {
+    "start": "electron .",
+    "cli": "node src/cli.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "devDependencies": {},
+  "dependencies": {
+    "electron": "^33.2.1"
+  }
+}

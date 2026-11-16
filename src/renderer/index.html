@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; img-src 'self' https: data:; style-src 'self'; script-src 'self'">
+  <title>Unity Asset Downloader</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <section id="signin" class="screen hidden">
+    <div class="signin-card">
+      <div class="logo">⬢</div>
+      <h1>Unity Asset Downloader</h1>
+      <p>Sign in with your Unity ID to see every asset you own and download the <code>.unitypackage</code> files directly.</p>
+      <button id="btn-login" class="primary">Sign in with Unity</button>
+      <p class="hint" id="signin-msg"></p>
+    </div>
+  </section>
+
+  <section id="app" class="screen hidden">
+    <header>
+      <div class="title">
+        <span class="logo small">⬢</span>
+        <strong>My Assets</strong>
+        <span id="count" class="muted"></span>
+      </div>
+      <input id="search" type="search" placeholder="Search name or publisher…" autocomplete="off">
+      <select id="filter" title="Filter">
+        <option value="all">All</option>
+        <option value="new">Not downloaded</option>
+        <option value="downloaded">Downloaded</option>
+        <option value="outdated">Update available</option>
+      </select>
+      <select id="sort" title="Sort">
+        <option value="recent">Recently acquired</option>
+        <option value="name">Name</option>
+        <option value="publisher">Publisher</option>
+        <option value="size">Size</option>
+        <option value="updated">Last updated</option>
+      </select>
+      <div class="spacer"></div>
+      <button id="btn-update-all" class="primary hidden" title="Download the newest version of every outdated package">Update all</button>
+      <button id="btn-dl-visible" title="Download every asset in the current view that isn't downloaded or is outdated">Download shown</button>
+      <button id="btn-refresh" title="Reload list">↻</button>
+      <button id="btn-logout" title="Sign out">Sign out</button>
+    </header>
+
+    <div class="folderbar">
+      <span class="muted">Save to</span>
+      <button id="btn-folder" class="link"></button>
+      <button id="btn-open-folder" class="link muted">open</button>
+      <span class="spacer"></span>
+      <span id="queue-info" class="muted"></span>
+    </div>
+
+    <div class="selectbar">
+      <label class="selall"><input id="select-all" type="checkbox"> <span id="sel-count" class="muted">Select all shown</span></label>
+      <button id="btn-clear-sel" class="link muted hidden">clear</button>
+      <span class="spacer"></span>
+      <button id="btn-dl-selected" class="primary" disabled>Download selected</button>
+    </div>
+
+    <main id="list-wrap">
+      <div id="status" class="status"></div>
+      <ul id="list"></ul>
+    </main>
+  </section>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
